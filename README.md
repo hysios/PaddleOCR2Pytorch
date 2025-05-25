@@ -13,9 +13,14 @@
 
 ## 注意
 
-`PytorchOCR`由`PaddleOCRv2.0+`动态图版本移植。
+`PytorchOCR`由`>= PaddleOCRv2.0+`动态图版本移植。
 
 **近期更新**
+
+- 2025.05.25 **[PP-OCRv5](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv5/PP-OCRv5.md)**: 全场景高精度文字识别
+  1. 🌐 单模型支持**五种**文字类型(**简体中文**、**繁体中文**、**中文拼音**、**英文**和**日文**)。
+  2. ✍️ 支持复杂**手写体**识别：复杂连笔、非规范字迹识别性能显著提升。
+  3. 🎯 整体识别精度提升 - 多种应用场景达到 SOTA 精度, 相比上一版本PP-OCRv4，识别精度**提升13个百分点**！
 
 - 2024.02.20 [PP-OCRv4](./doc/doc_ch/PP-OCRv4_introduction.md)，提供mobile和server两种模型
   - PP-OCRv4-mobile：速度可比情况下，中文场景效果相比于PP-OCRv3再提升4.5%，英文场景提升10%，80语种多语言模型平均识别准确率提升8%以上
@@ -58,7 +63,7 @@ PyTorch模型下载链接：https://pan.baidu.com/s/1r1DELT8BlgxeOP2RqREJEg 提�
 
 PaddleOCR模型百度网盘链接：https://pan.baidu.com/s/1getAprT2l_JqwhjwML0g9g 提取码：lmv7 
 
-更多模型下载（包括多语言），可以参考[PT-OCR v2.0 系列模型下载](./doc/doc_ch/models_list.md)
+更多模型下载（包括多语言），可以参考[PT-OCR系列模型下载](./doc/doc_ch/models_list.md)
 
 ## 文档教程
 - [快速安装](./doc/doc_ch/installation.md)
@@ -71,6 +76,9 @@ PaddleOCR模型百度网盘链接：https://pan.baidu.com/s/1getAprT2l_JqwhjwML0
 
 ## TODO
 
+- [ ] PP-OCRv5：[文档图像方向分类模块PP-LCNet_x1_0_doc_ori](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/doc_img_orientation_classification.html)，[文本图像矫正模块UVDoc](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/text_image_unwarping.html)，[文本行方向分类模块PP-LCNet_x0_25_textline_ori](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/text_line_orientation_classification.html)
+- [ ] [通用文档解析方案](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/pipeline_usage/PP-StructureV3.html)-[PP-StructureV3](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-StructureV3/PP-StructureV3.md)：支持多场景、多版式 PDF 高精度解析，在公开评测集中**领先众多开源和闭源方案**。
+- [ ] [智能文档理解方案](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/pipeline_usage/PP-ChatOCRv4.html)-[PP-ChatOCRv4](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-ChatOCRv4/PP-ChatOCRv4.md)：原生支持文心大模型4.5 Turbo，精度相比上一代**提升15个百分点**。
 - [ ] 前沿算法：文本检测 [DRRG](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_det_drrg.md)，文本识别 [RFL](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_rec_rfl.md)
 - [ ] 文本识别：[ABINet](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_rec_abinet.md), [VisionLAN](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_rec_visionlan.md), [SPIN](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_rec_spin.md), [RobustScanner](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_rec_robustscanner.md)
 - [ ] 表格识别：[TableMaster](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/algorithm_table_master.md)

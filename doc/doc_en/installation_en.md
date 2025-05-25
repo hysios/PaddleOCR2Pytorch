@@ -4,26 +4,26 @@
 
 ```
 shapely
-numpy
+numpy >= 1.24
 pillow
 pyclipper
-opencv-python <= 4.2.0.32
-pytorch
+opencv-python >== 4.1.0
+pytorch >= 1.13
 ```
 
 ## Conversions
 
 ```
 shapely
-numpy
+numpy >= 1.24
 pillow
 pyclipper
-opencv-python <= 4.2.0.32
-pytorch
-paddlepaddle==2.0.0
+opencv-python >== 4.1.0
+pytorch >= 1.13
+paddlepaddle >= 2.0.0
 ```
 
-**PaddlePaddle 2.0**
+**PaddlePaddle  >= 2.0**
 
 ```bash
 pip3 install --upgrade pip

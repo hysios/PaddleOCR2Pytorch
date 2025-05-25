@@ -71,6 +71,16 @@ python ./converter/ch_ppocr_v4_det_server_converter.py --yaml_path ./configs/det
 python ./converter/ch_ppocr_v4_rec_converter.py --yaml_path ./configs/rec/PP-OCRv4/ch_PP-OCRv4_rec.yml --src_model_path ch_PP-OCRv4_rec_train_dir
 # ch_PP-OCRv4_server_rec
 python ./converter/ch_ppocr_v4_rec_server_converter.py --yaml_path ./configs/rec/PP-OCRv4/ch_PP-OCRv4_rec_hgnet.yml --src_model_path ch_PP-OCRv4_rec_server_train_dir
+
+# PP-OCRv5
+# PP-OCRv5_mobile_det
+python ./converter/ppocr_v5_det_converter.py --yaml_path configs/det/PP-OCRv5/PP-OCRv5_mobile_det.yml --src_model_path PP-OCRv5_mobile_det_pretrained.pdparams
+# PP-OCRv5_server_det
+python ./converter/ppocr_v5_det_converter.py --yaml_path configs/det/PP-OCRv5/PP-OCRv5_server_det.yml --src_model_path PP-OCRv5_server_det_pretrained.pdparams
+# PP-OCRv5_mobile_rec
+python ./converter/ppocr_v5_rec_converter.py --yaml_path configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec.yml --src_model_path PP-OCRv5_mobile_rec_pretrained.pdparams
+# PP-OCRv5_server_rec
+python ./converter/ppocr_v5_rec_converter.py --yaml_path configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml --src_model_path PP-OCRv5_server_rec_pretrained.pdparams
 ```
 
 <a name="多语言识别模型"></a>
@@ -214,6 +224,12 @@ python ./tools/infer/predict_det.py --image_dir ./doc/imgs/00009282.jpg --det_mo
 
 # ppocrv4_det server
 python3 ./tools/infer/predict_det.py --image_dir ./doc/imgs/00009282.jpg --det_model_path your_ch_ptocr_v4_det_server_infer_path.pth --det_yaml_path ./configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_teacher.yml
+
+# PP-OCRv5
+# PP-OCRv5_mobile_det
+python ./tools/infer/predict_det.py --det_yaml_path configs/det/PP-OCRv5/PP-OCRv5_mobile_det.yml --det_model_path ./ptocr_v5_mobile_det.pth --image_dir ./doc/imgs/00009282.jpg
+# PP-OCRv5_server_det
+python ./tools/infer/predict_det.py --use_gpu false --det_algorithm DB --det_yaml_path configs/det/PP-OCRv5/PP-OCRv5_server_det.yml --det_model_path ./ptocr_v5_server_det.pth --image_dir ./doc/imgs/00009282.jpg
 ```
 
 ![](../imgs_results/det_res_img_10_db.jpg)
@@ -249,6 +265,12 @@ python ./tools/infer/predict_rec.py --image_dir ./doc/imgs_words/ch/word_1.jpg -
 
 # ppocrv4_rec server
 python ./tools/infer/predict_rec.py --image_dir ./doc/imgs_words/ch/word_1.jpg --rec_model_path your_ch_ptocr_v4_rec_server_infer_path.pth --rec_yaml_path ./configs/rec/PP-OCRv4/ch_PP-OCRv4_rec_hgnet.yml --rec_image_shape='3,48,320'
+
+# PP-OCRv5
+# PP-OCRv5_mobile_rec
+python ./tools/infer/predict_rec.py --rec_yaml_path configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec.yml --rec_image_shape='3,48,320' --rec_char_dict_path ./pytorchocr/utils/dict/ppocrv5_dict.txt --rec_model_path ./ptocr_v5_mobile_rec.pth --image_dir ./doc/imgs_words/ch/word_1.jpg
+# PP-OCRv5/PP-OCRv5_server_rec
+python ./tools/infer/predict_rec.py --use_gpu false --rec_yaml_path configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml --rec_image_shape='3,48,320' --rec_char_dict_path ./pytorchocr/utils/dict/ppocrv5_dict.txt --rec_model_path ./ptocr_v5_server_rec.pth --image_dir ./doc/imgs_words/ch/word_1.jpg
 ```
 
 ![](../imgs_words/ch/word_4.jpg)
@@ -328,6 +350,12 @@ python ./tools/infer/predict_system.py --image_dir ./doc/imgs/1.jpg --det_model_
 # other det-models: use --det_yaml_path
 # other rec-models: use --rec_char_dict_path, --rec_yaml_path and --rec_yaml_path
 python ./tools/infer/predict_system.py --image_dir ./doc/imgs/1.jpg --det_model_path your_ch_ptocr_v4_det_infer_path.pth --det_yaml_path ./configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_student.yml --rec_image_shape 3,48,320 --rec_model_path your_ch_ptocr_v4_rec_infer_path.pth --rec_yaml_path ./configs/rec/PP-OCRv4/ch_PP-OCRv4_rec.yml
+
+# PP-OCRv5
+# mobile
+python ./tools/infer/predict_system.py --use_gpu false --det_yaml_path configs/det/PP-OCRv5/PP-OCRv5_mobile_det.yml --det_model_path ./ptocr_v5_mobile_det.pth --rec_yaml_path configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec.yml --rec_model_path ./ptocr_v5_mobile_rec.pth --rec_image_shape='3,48,320' --rec_char_dict_path ./pytorchocr/utils/dict/ppocrv5_dict.txt  --image_dir ./doc/imgs/1.jpg
+# server
+python ./tools/infer/predict_system.py --use_gpu false --det_yaml_path configs/det/PP-OCRv5/PP-OCRv5_server_det.yml --det_model_path ./ptocr_v5_server_det.pth --rec_yaml_path configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml --rec_model_path ./ptocr_v5_server_rec.pth --rec_image_shape='3,48,320' --rec_char_dict_path ./pytorchocr/utils/dict/ppocrv5_dict.txt  --image_dir ./doc/imgs/1.jpg
 ```
 
 执行命令后，识别结果图像如下：
@@ -459,6 +487,9 @@ def init_args():
     parser = argparse.ArgumentParser()
     # params for prediction engine
     parser.add_argument("--use_gpu", type=str2bool, default=True)
+    # parser.add_argument("--ir_optim", type=str2bool, default=True)
+    # parser.add_argument("--use_tensorrt", type=str2bool, default=False)
+    # parser.add_argument("--use_fp16", type=str2bool, default=False)
     parser.add_argument("--gpu_mem", type=int, default=500)
     parser.add_argument("--warmup", type=str2bool, default=False)
 
@@ -468,6 +499,7 @@ def init_args():
     parser.add_argument("--det_model_path", type=str)
     parser.add_argument("--det_limit_side_len", type=float, default=960)
     parser.add_argument("--det_limit_type", type=str, default='max')
+    parser.add_argument("--det_box_type", type=str, default="quad")
 
     # DB parmas
     parser.add_argument("--det_db_thresh", type=float, default=0.3)
@@ -556,6 +588,11 @@ def init_args():
     parser.add_argument("--sr_image_shape", type=str, default="3, 32, 128")
     parser.add_argument("--sr_batch_num", type=int, default=1)
 
+    #
+    parser.add_argument("--draw_img_save_dir", type=str, default="./inference_results")
+    parser.add_argument("--save_crop_res", type=str2bool, default=False)
+    parser.add_argument("--crop_res_save_dir", type=str, default="./output")
+
     # params .yaml
     parser.add_argument("--det_yaml_path", type=str, default=None)
     parser.add_argument("--rec_yaml_path", type=str, default=None)
@@ -572,6 +609,14 @@ def init_args():
     parser.add_argument("--save_log_path", type=str, default="./log_output/")
 
     parser.add_argument("--show_log", type=str2bool, default=True)
+
+    # extended function
+    parser.add_argument(
+        "--return_word_box",
+        type=str2bool,
+        default=False,
+        help="Whether return the bbox of each word (split by space) or chinese character. Only used in ppstructure for layout recovery",
+    )
 
     return parser
 ```

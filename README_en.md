@@ -13,10 +13,14 @@ This repository aims to
 
 ## Notice
 
-`PytorchOCR` models are converted from `PaddleOCRv2.0`.
+`PytorchOCR` models are converted from `>= PaddleOCRv2.0`.
 
 **Recent updates**
 
+- 2025.05.25 **[PP-OCRv5](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv5/PP-OCRv5.md)**: High-Accuracy Text Recognition Model for All Scenarios - Instant Text from Images/PDFs.
+  1. 🌐 Single-model support for **five** text types - Seamlessly process **Simplified Chinese, Traditional Chinese, Simplified Chinese Pinyin, English** and **Japanse** within a single model.
+  2. ✍️ Improved **handwriting recognition**: Significantly better at complex cursive scripts and non-standard handwriting.
+  3. 🎯 **13-point accuracy gain** over PP-OCRv4, achieving state-of-the-art performance across a variety of real-world scenarios.
 - 2024.02.20 [PP-OCRv4](./doc/doc_ch/PP-OCRv4_introduction.md), support mobile version and server version
   - PP-OCRv4-mobile：When the speed is comparable, the effect of the Chinese scene is improved by 4.5% compared with PP-OCRv3, the English scene is improved by 10%, and the average recognition accuracy of the 80-language multilingual model is increased by more than 8%.
   - PP-OCRv4-server：Release the OCR model with the highest accuracy at present, the detection model accuracy increased by 4.9% in the Chinese and English scenes, and the recognition model accuracy increased by 2%
@@ -67,6 +71,9 @@ If you want to get more models including multilingual models，please refer to [
 
 ## TODO
 
+- [ ] PP-OCRv5：[Document Image Orientation Classification Module: PP-LCNet_x1_0_doc_ori](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/doc_img_orientation_classification.html)，[Text Image Rectification Module: UVDoc](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/text_image_unwarping.html)，[Text Line Orientation Classification Module: PP-LCNet_x0_25_textline_ori](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/module_usage/text_line_orientation_classification.html)
+- [ ] [General Document-Parsing Solution](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/pipeline_usage/PP-StructureV3.html) [PP-StructureV3](./docs/version3.x/algorithm/PP-StructureV3/PP-StructureV3.en.md): Delivers high-precision parsing of multi-layout, multi-scene PDFs, outperforming many open- and closed-source solutions on public benchmarks. 
+- [ ] [Intelligent Document-Understanding Solution](https://paddlepaddle.github.io/PaddleOCR/latest/version3.x/pipeline_usage/PP-ChatOCRv4.html) [PP-ChatOCRv4](./docs/version3.x/algorithm/PP-ChatOCRv4/PP-ChatOCRv4.en.md): Natively powered by the WenXin large model 4.5T, achieving 15 percentage points higher accuracy than its predecessor.
 - [ ] Add implementation of [cutting-edge algorithms](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_overview_en.md)：Text Detection [DRRG](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_overview_en.md),  Text Recognition [RFL](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_rec_rfl_en.md)
 - [ ] Text Recognition: [ABINet](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_rec_abinet_en.md), [VisionLAN](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_rec_visionlan_en.md), [SPIN](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_rec_spin_en.md), [RobustScanner](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_rec_robustscanner_en.md)
 - [ ] Table Recognition: [TableMaster](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/algorithm_table_master_en.md)

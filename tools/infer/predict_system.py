@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
@@ -10,11 +11,15 @@ import copy
 import numpy as np
 import time
 from PIL import Image
+import json
 import tools.infer.pytorchocr_utility as utility
 import tools.infer.predict_rec as predict_rec
 import tools.infer.predict_det as predict_det
 import tools.infer.predict_cls as predict_cls
-from pytorchocr.utils.utility import get_image_file_list, check_and_read_gif
+from pytorchocr.utils.utility import (
+    get_image_file_list,
+    check_and_read,
+)
 from tools.infer.pytorchocr_utility import draw_ocr_box_txt
 
 
@@ -28,78 +33,109 @@ class TextSystem(object):
         if self.use_angle_cls:
             self.text_classifier = predict_cls.TextClassifier(args, **kwargs)
 
+        self.args = args
+        self.crop_image_res_index = 0
 
-    def get_rotate_crop_image(self, img, points):
-        '''
-        img_height, img_width = img.shape[0:2]
-        left = int(np.min(points[:, 0]))
-        right = int(np.max(points[:, 0]))
-        top = int(np.min(points[:, 1]))
-        bottom = int(np.max(points[:, 1]))
-        img_crop = img[top:bottom, left:right, :].copy()
-        points[:, 0] = points[:, 0] - left
-        points[:, 1] = points[:, 1] - top
-        '''
-        img_crop_width = int(
-            max(
-                np.linalg.norm(points[0] - points[1]),
-                np.linalg.norm(points[2] - points[3])))
-        img_crop_height = int(
-            max(
-                np.linalg.norm(points[0] - points[3]),
-                np.linalg.norm(points[1] - points[2])))
-        pts_std = np.float32([[0, 0], [img_crop_width, 0],
-                              [img_crop_width, img_crop_height],
-                              [0, img_crop_height]])
-        M = cv2.getPerspectiveTransform(points, pts_std)
-        dst_img = cv2.warpPerspective(
-            img,
-            M, (img_crop_width, img_crop_height),
-            borderMode=cv2.BORDER_REPLICATE,
-            flags=cv2.INTER_CUBIC)
-        dst_img_height, dst_img_width = dst_img.shape[0:2]
-        if dst_img_height * 1.0 / dst_img_width >= 1.5:
-            dst_img = np.rot90(dst_img)
-        return dst_img
-
-    def print_draw_crop_rec_res(self, img_crop_list, rec_res):
+    def draw_crop_rec_res(self, output_dir, img_crop_list, rec_res):
+        os.makedirs(output_dir, exist_ok=True)
         bbox_num = len(img_crop_list)
         for bno in range(bbox_num):
-            cv2.imwrite("./output/img_crop_%d.jpg" % bno, img_crop_list[bno])
-            print(bno, rec_res[bno])
+            cv2.imwrite(
+                os.path.join(
+                    output_dir, "mg_crop_{}.jpg".format(bno + self.crop_image_res_index)
+                ),
+                img_crop_list[bno],
+            )
+            print("{bno}, {}".format(rec_res[bno]))
+        self.crop_image_res_index += bbox_num
 
-    def __call__(self, img):
+    def __call__(self, img, cls=True, slice={}):
+        time_dict = {"det": 0, "rec": 0, "cls": 0, "all": 0}
+
+        if img is None:
+            print("no valid image provided")
+            return None, None, time_dict
+
+        start = time.time()
         ori_im = img.copy()
-        dt_boxes, elapse = self.text_detector(img)
-        print("dt_boxes num : {}, elapse : {}".format(
-            len(dt_boxes), elapse))
+
+        if slice:
+            slice_gen = utility.slice_generator(
+                img,
+                horizontal_stride=slice["horizontal_stride"],
+                vertical_stride=slice["vertical_stride"],
+            )
+            elapsed = []
+            dt_slice_boxes = []
+
+            for slice_crop, v_start, h_start in slice_gen:
+                dt_boxes, elapse = self.text_detector(slice_crop, use_slice=True)
+                if dt_boxes.size:
+                    dt_boxes[:, :, 0] += h_start
+                    dt_boxes[:, :, 1] += v_start
+                    dt_slice_boxes.append(dt_boxes)
+                    elapsed.append(elapse)
+            dt_boxes = np.concatenate(dt_slice_boxes)
+
+            dt_boxes = utility.merge_fragmented(
+                boxes=dt_boxes,
+                x_threshold=slice["merge_x_thres"],
+                y_threshold=slice["merge_y_thres"],
+            )
+            elapse = sum(elapsed)
+        else:
+            dt_boxes, elapse = self.text_detector(img)
+
+        time_dict["det"] = elapse
+
         if dt_boxes is None:
-            return None, None
+            print("no dt_boxes found, elapsed : {}".format(elapse))
+            end = time.time()
+            time_dict["all"] = end - start
+            return None, None, time_dict
+        else:
+            print(
+                "dt_boxes num : {}, elapsed : {}".format(len(dt_boxes), elapse)
+            )
+
         img_crop_list = []
 
         dt_boxes = sorted_boxes(dt_boxes)
 
         for bno in range(len(dt_boxes)):
             tmp_box = copy.deepcopy(dt_boxes[bno])
-            img_crop = self.get_rotate_crop_image(ori_im, tmp_box)
+            if self.args.det_box_type == "quad":
+                img_crop = utility.get_rotate_crop_image(ori_im, tmp_box)
+            else:
+                img_crop = utility.get_minarea_rect_crop(ori_im, tmp_box)
             img_crop_list.append(img_crop)
-        if self.use_angle_cls:
+        if self.use_angle_cls and cls:
             img_crop_list, angle_list, elapse = self.text_classifier(
                 img_crop_list)
+            time_dict["cls"] = elapse
             print("cls num  : {}, elapse : {}".format(
                 len(img_crop_list), elapse))
 
+        if len(img_crop_list) > 1000:
+            print(
+                "rec crops num: {}, time and memory cost may be large.".format(len(img_crop_list))
+            )
+
         rec_res, elapse = self.text_recognizer(img_crop_list)
+        time_dict["rec"] = elapse
         print("rec_res num  : {}, elapse : {}".format(
             len(rec_res), elapse))
-        # self.print_draw_crop_rec_res(img_crop_list, rec_res)
+        if self.args.save_crop_res:
+            self.draw_crop_rec_res(self.args.crop_res_save_dir, img_crop_list, rec_res)
         filter_boxes, filter_rec_res = [], []
         for box, rec_reuslt in zip(dt_boxes, rec_res):
             text, score = rec_reuslt
             if score >= self.drop_score:
                 filter_boxes.append(box)
                 filter_rec_res.append(rec_reuslt)
-        return filter_boxes, filter_rec_res
+        end = time.time()
+        time_dict["all"] = end - start
+        return filter_boxes, filter_rec_res, time_dict
 
 
 def sorted_boxes(dt_boxes):
@@ -129,43 +165,126 @@ def main(args):
     is_visualize = True
     font_path = args.vis_font_path
     drop_score = args.drop_score
-    for image_file in image_file_list:
-        img, flag = check_and_read_gif(image_file)
-        if not flag:
+    draw_img_save_dir = args.draw_img_save_dir
+    os.makedirs(draw_img_save_dir, exist_ok=True)
+
+    save_results = []
+    total_time = 0
+    _st = time.time()
+
+    for idx, image_file in enumerate(image_file_list):
+        img, flag_gif,  flag_pdf = check_and_read(image_file)
+        if not flag_gif and not flag_pdf:
             img = cv2.imread(image_file)
-        if img is None:
-            print("error in loading image:{}".format(image_file))
-            continue
-        starttime = time.time()
-        dt_boxes, rec_res = text_sys(img)
-        elapse = time.time() - starttime
-        print("Predict time of %s: %.3fs" % (image_file, elapse))
+        if not flag_pdf:
+            if img is None:
+                print("error in loading image:{}".format(image_file))
+                continue
+            imgs = [img]
+        else:
+            page_num = args.page_num
+            if page_num > len(img) or page_num == 0:
+                page_num = len(img)
+            imgs = img[:page_num]
 
-        for text, score in rec_res:
-            print("{}, {:.3f}".format(text, score))
+        for index, img in enumerate(imgs):
+            starttime = time.time()
+            dt_boxes, rec_res, time_dict = text_sys(img)
+            elapse = time.time() - starttime
+            if len(imgs) > 1:
+                print(
+                    str(idx)
+                    + "_"
+                    + str(index)
+                    + "  Predict time of %s: %.3fs" % (image_file, elapse)
+                )
+            else:
+                print(
+                    str(idx) + "  Predict time of %s: %.3fs" % (image_file, elapse)
+                )
 
-        if is_visualize:
-            image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            boxes = dt_boxes
-            txts = [rec_res[i][0] for i in range(len(rec_res))]
-            scores = [rec_res[i][1] for i in range(len(rec_res))]
+            for text, score in rec_res:
+                print("{}, {:.3f}".format(text, score))
 
-            draw_img = draw_ocr_box_txt(
-                image,
-                boxes,
-                txts,
-                scores,
-                drop_score=drop_score,
-                font_path=font_path)
-            draw_img_save = "./inference_results/"
-            if not os.path.exists(draw_img_save):
-                os.makedirs(draw_img_save)
-            cv2.imwrite(
-                os.path.join(draw_img_save, os.path.basename(image_file)),
-                draw_img[:, :, ::-1])
-            print("The visualized image saved in {}".format(
-                os.path.join(draw_img_save, os.path.basename(image_file))))
+            res = [
+                {
+                    "transcription": rec_res[i][0],
+                    "points": np.array(dt_boxes[i]).astype(np.int32).tolist(),
+                }
+                for i in range(len(dt_boxes))
+            ]
+            if len(imgs) > 1:
+                save_pred = (
+                    os.path.basename(image_file)
+                    + "_"
+                    + str(index)
+                    + "\t"
+                    + json.dumps(res, ensure_ascii=False)
+                    + "\n"
+                )
+            else:
+                save_pred = (
+                    os.path.basename(image_file)
+                    + "\t"
+                    + json.dumps(res, ensure_ascii=False)
+                    + "\n"
+                )
+            save_results.append(save_pred)
+
+            if is_visualize:
+                image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                boxes = dt_boxes
+                txts = [rec_res[i][0] for i in range(len(rec_res))]
+                scores = [rec_res[i][1] for i in range(len(rec_res))]
+
+                draw_img = draw_ocr_box_txt(
+                    image,
+                    boxes,
+                    txts,
+                    scores,
+                    drop_score=drop_score,
+                    font_path=font_path,
+                )
+
+                if flag_gif:
+                    save_file = image_file[:-3] + "png"
+                elif flag_pdf:
+                    save_file = image_file.replace(".pdf", "_" + str(index) + ".png")
+                else:
+                    save_file = image_file
+                cv2.imwrite(
+                    os.path.join(draw_img_save_dir, os.path.basename(save_file)),
+                    draw_img[:, :, ::-1],
+                )
+
+                print(
+                    "The visualized image saved in {}".format(
+                        os.path.join(draw_img_save_dir, os.path.basename(save_file))
+                    )
+                )
+
+    print("The predict total time is {}".format(time.time() - _st))
+
+    with open(
+        os.path.join(draw_img_save_dir, "system_results.txt"), "w", encoding="utf-8"
+    ) as f:
+        f.writelines(save_results)
 
 
 if __name__ == '__main__':
-    main(utility.parse_args())
+    args = utility.parse_args()
+    if args.use_mp:
+        p_list = []
+        total_process_num = args.total_process_num
+        for process_id in range(total_process_num):
+            cmd = (
+                [sys.executable, "-u"]
+                + sys.argv
+                + ["--process_id={}".format(process_id), "--use_mp={}".format(False)]
+            )
+            p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stdout)
+            p_list.append(p)
+        for p in p_list:
+            p.wait()
+    else:
+        main(args)

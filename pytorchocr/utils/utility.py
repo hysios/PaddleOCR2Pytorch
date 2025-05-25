@@ -1,5 +1,6 @@
 import os
 import imghdr
+import numpy as np
 import cv2
 import logging
 

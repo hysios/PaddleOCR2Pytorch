@@ -92,15 +92,24 @@ class BaseOCRV20:
             print('{}----{}'.format(k,type(v)))
 
     def read_paddle_weights(self, weights_path):
-        import paddle.fluid as fluid
-        with fluid.dygraph.guard():
-            para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+        try:
+            import paddle.fluid as fluid
+            with fluid.dygraph.guard():
+                para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+        except:
+            import paddle
+            para_state_dict = paddle.load(weights_path)
+            opti_state_dict = None
         return para_state_dict, opti_state_dict
 
     def print_paddle_state_dict(self, weights_path):
-        import paddle.fluid as fluid
-        with fluid.dygraph.guard():
-            para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+        try:
+            import paddle.fluid as fluid
+            with fluid.dygraph.guard():
+                para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+        except:
+            import paddle
+            para_state_dict = paddle.load(weights_path)
         print('paddle"')
         for k,v in para_state_dict.items():
             print('{}----{}'.format(k,type(v)))
