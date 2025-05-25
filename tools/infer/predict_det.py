@@ -12,7 +12,7 @@ import json
 import torch
 from pytorchocr.base_ocr_v20 import BaseOCRV20
 import tools.infer.pytorchocr_utility as utility
-from pytorchocr.utils.utility import get_image_file_list, check_and_read_gif
+from pytorchocr.utils.utility import get_image_file_list, check_and_read
 from pytorchocr.data import create_operators, transform
 from pytorchocr.postprocess import build_post_process
 
@@ -182,9 +182,12 @@ class TextDetector(BaseOCRV20):
         dt_boxes = np.array(dt_boxes_new)
         return dt_boxes
 
-    def __call__(self, img):
+    def predict(self, img):
         ori_im = img.copy()
         data = {'image': img}
+
+        st = time.time()
+
         data = transform(data, self.preprocess_op)
         img, shape_list = data
         if img is None:
@@ -192,7 +195,6 @@ class TextDetector(BaseOCRV20):
         img = np.expand_dims(img, axis=0)
         shape_list = np.expand_dims(shape_list, axis=0)
         img = img.copy()
-        starttime = time.time()
 
         with torch.no_grad():
             inp = torch.from_numpy(img)
@@ -219,6 +221,7 @@ class TextDetector(BaseOCRV20):
 
         post_result = self.postprocess_op(preds, shape_list)
         dt_boxes = post_result[0]['points']
+
         if (self.det_algorithm == "SAST" and
             self.det_sast_polygon) or (self.det_algorithm in ["PSE", "FCE"] and
                                        self.postprocess_op.box_type == 'poly'):
@@ -226,7 +229,111 @@ class TextDetector(BaseOCRV20):
         else:
             dt_boxes = self.filter_tag_det_res(dt_boxes, ori_im.shape)
 
-        elapse = time.time() - starttime
+        et = time.time()
+        return dt_boxes, et - st
+
+
+    def __call__(self, img, use_slice=False):
+        # For image like poster with one side much greater than the other side,
+        # splitting recursively and processing with overlap to enhance performance.
+        MIN_BOUND_DISTANCE = 50
+        dt_boxes = np.zeros((0, 4, 2), dtype=np.float32)
+        elapse = 0
+        if (
+                img.shape[0] / img.shape[1] > 2
+                and img.shape[0] > self.args.det_limit_side_len
+                and use_slice
+        ):
+            start_h = 0
+            end_h = 0
+            while end_h <= img.shape[0]:
+                end_h = start_h + img.shape[1] * 3 // 4
+                subimg = img[start_h:end_h, :]
+                if len(subimg) == 0:
+                    break
+                sub_dt_boxes, sub_elapse = self.predict(subimg)
+                offset = start_h
+                # To prevent text blocks from being cut off, roll back a certain buffer area.
+                if (
+                        len(sub_dt_boxes) == 0
+                        or img.shape[1] - max([x[-1][1] for x in sub_dt_boxes])
+                        > MIN_BOUND_DISTANCE
+                ):
+                    start_h = end_h
+                else:
+                    sorted_indices = np.argsort(sub_dt_boxes[:, 2, 1])
+                    sub_dt_boxes = sub_dt_boxes[sorted_indices]
+                    bottom_line = (
+                        0
+                        if len(sub_dt_boxes) <= 1
+                        else int(np.max(sub_dt_boxes[:-1, 2, 1]))
+                    )
+                    if bottom_line > 0:
+                        start_h += bottom_line
+                        sub_dt_boxes = sub_dt_boxes[
+                            sub_dt_boxes[:, 2, 1] <= bottom_line
+                            ]
+                    else:
+                        start_h = end_h
+                if len(sub_dt_boxes) > 0:
+                    if dt_boxes.shape[0] == 0:
+                        dt_boxes = sub_dt_boxes + np.array(
+                            [0, offset], dtype=np.float32
+                        )
+                    else:
+                        dt_boxes = np.append(
+                            dt_boxes,
+                            sub_dt_boxes + np.array([0, offset], dtype=np.float32),
+                            axis=0,
+                        )
+                elapse += sub_elapse
+        elif (
+                img.shape[1] / img.shape[0] > 3
+                and img.shape[1] > self.args.det_limit_side_len * 3
+                and use_slice
+        ):
+            start_w = 0
+            end_w = 0
+            while end_w <= img.shape[1]:
+                end_w = start_w + img.shape[0] * 3 // 4
+                subimg = img[:, start_w:end_w]
+                if len(subimg) == 0:
+                    break
+                sub_dt_boxes, sub_elapse = self.predict(subimg)
+                offset = start_w
+                if (
+                        len(sub_dt_boxes) == 0
+                        or img.shape[0] - max([x[-1][0] for x in sub_dt_boxes])
+                        > MIN_BOUND_DISTANCE
+                ):
+                    start_w = end_w
+                else:
+                    sorted_indices = np.argsort(sub_dt_boxes[:, 2, 0])
+                    sub_dt_boxes = sub_dt_boxes[sorted_indices]
+                    right_line = (
+                        0
+                        if len(sub_dt_boxes) <= 1
+                        else int(np.max(sub_dt_boxes[:-1, 1, 0]))
+                    )
+                    if right_line > 0:
+                        start_w += right_line
+                        sub_dt_boxes = sub_dt_boxes[sub_dt_boxes[:, 1, 0] <= right_line]
+                    else:
+                        start_w = end_w
+                if len(sub_dt_boxes) > 0:
+                    if dt_boxes.shape[0] == 0:
+                        dt_boxes = sub_dt_boxes + np.array(
+                            [offset, 0], dtype=np.float32
+                        )
+                    else:
+                        dt_boxes = np.append(
+                            dt_boxes,
+                            sub_dt_boxes + np.array([offset, 0], dtype=np.float32),
+                            axis=0,
+                        )
+                elapse += sub_elapse
+        else:
+            dt_boxes, elapse = self.predict(img)
         return dt_boxes, elapse
 
 
@@ -234,32 +341,79 @@ class TextDetector(BaseOCRV20):
 if __name__ == "__main__":
     args = utility.parse_args()
     image_file_list = get_image_file_list(args.image_dir)
-    text_detector = TextDetector(args)
-    count = 0
     total_time = 0
-    draw_img_save = "./inference_results"
-    if not os.path.exists(draw_img_save):
-        os.makedirs(draw_img_save)
-    for image_file in image_file_list:
-        img, flag = check_and_read_gif(image_file)
-        if not flag:
+    draw_img_save_dir = args.draw_img_save_dir
+    os.makedirs(draw_img_save_dir, exist_ok=True)
+    # create text detector
+    text_detector = TextDetector(args)
+
+    count = 0
+    save_results = []
+
+    for idx, image_file in enumerate(image_file_list):
+        img, flag_gif, flag_pdf = check_and_read(image_file)
+        if not flag_gif and not flag_pdf:
             img = cv2.imread(image_file)
-        if img is None:
-            print("error in loading image:{}".format(image_file))
-            continue
-        dt_boxes, elapse = text_detector(img)
-        if count > 0:
+        if not flag_pdf:
+            if img is None:
+                print("error in loading image:{}".format(image_file))
+                continue
+            imgs = [img]
+        else:
+            page_num = args.page_num
+            if page_num > len(img) or page_num == 0:
+                page_num = len(img)
+            imgs = img[:page_num]
+
+        for index, img in enumerate(imgs):
+            st = time.time()
+            dt_boxes, _ = text_detector(img)
+            elapse = time.time() - st
             total_time += elapse
-        count += 1
-        save_pred = os.path.basename(image_file) + "\t" + str(
-            json.dumps(np.array(dt_boxes).astype(np.int32).tolist())) + "\n"
-        print(save_pred)
-        print("Predict time of {}: {}".format(image_file, elapse))
-        src_im = utility.draw_text_det_res(dt_boxes, image_file)
-        img_name_pure = os.path.split(image_file)[-1]
-        img_path = os.path.join(draw_img_save,
-                                "det_res_{}".format(img_name_pure))
-        cv2.imwrite(img_path, src_im)
-        print("The visualized image saved in {}".format(img_path))
-    if count > 1:
-        print("Avg Time: {}".format(total_time / (count - 1)))
+
+            if len(imgs) > 1:
+                save_pred = (
+                        os.path.basename(image_file)
+                        + "_"
+                        + str(index)
+                        + "\t"
+                        + str(json.dumps([x.tolist() for x in dt_boxes]))
+                        + "\n"
+                )
+            else:
+                save_pred = (
+                        os.path.basename(image_file)
+                        + "\t"
+                        + str(json.dumps([x.tolist() for x in dt_boxes]))
+                        + "\n"
+                )
+            save_results.append(save_pred)
+            print(save_pred)
+            if len(imgs) > 1:
+                print(
+                    "{}_{} The predict time of {}: {}".format(
+                        idx, index, image_file, elapse
+                    )
+                )
+            else:
+                print(
+                    "{} The predict time of {}: {}".format(idx, image_file, elapse)
+                )
+
+            src_im = utility.draw_text_det_res(dt_boxes, img)
+
+            if flag_gif:
+                save_file = image_file[:-3] + "png"
+            elif flag_pdf:
+                save_file = image_file.replace(".pdf", "_" + str(index) + ".png")
+            else:
+                save_file = image_file
+            img_path = os.path.join(
+                draw_img_save_dir, "det_res_{}".format(os.path.basename(save_file))
+            )
+            cv2.imwrite(img_path, src_im)
+            print("The visualized image saved in {}".format(img_path))
+
+    with open(os.path.join(draw_img_save_dir, "det_results.txt"), "w") as f:
+        f.writelines(save_results)
+        f.close()

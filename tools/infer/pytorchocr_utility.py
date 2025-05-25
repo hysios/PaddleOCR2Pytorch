@@ -24,6 +24,7 @@ def init_args():
     parser.add_argument("--det_model_path", type=str)
     parser.add_argument("--det_limit_side_len", type=float, default=960)
     parser.add_argument("--det_limit_type", type=str, default='max')
+    parser.add_argument("--det_box_type", type=str, default="quad")
 
     # DB parmas
     parser.add_argument("--det_db_thresh", type=float, default=0.3)
@@ -112,6 +113,11 @@ def init_args():
     parser.add_argument("--sr_image_shape", type=str, default="3, 32, 128")
     parser.add_argument("--sr_batch_num", type=int, default=1)
 
+    #
+    parser.add_argument("--draw_img_save_dir", type=str, default="./inference_results")
+    parser.add_argument("--save_crop_res", type=str2bool, default=False)
+    parser.add_argument("--crop_res_save_dir", type=str, default="./output")
+
     # params .yaml
     parser.add_argument("--det_yaml_path", type=str, default=None)
     parser.add_argument("--rec_yaml_path", type=str, default=None)
@@ -128,6 +134,14 @@ def init_args():
     parser.add_argument("--save_log_path", type=str, default="./log_output/")
 
     parser.add_argument("--show_log", type=str2bool, default=True)
+
+    # extended function
+    parser.add_argument(
+        "--return_word_box",
+        type=str2bool,
+        default=False,
+        help="Whether return the bbox of each word (split by space) or chinese character. Only used in ppstructure for layout recovery",
+    )
 
     return parser
 
@@ -364,12 +378,11 @@ def draw_e2e_res(dt_boxes, strs, img_path):
     return src_im
 
 
-def draw_text_det_res(dt_boxes, img_path):
-    src_im = cv2.imread(img_path)
+def draw_text_det_res(dt_boxes, img):
     for box in dt_boxes:
         box = np.array(box).astype(np.int32).reshape(-1, 2)
-        cv2.polylines(src_im, [box], True, color=(255, 255, 0), thickness=2)
-    return src_im
+        cv2.polylines(img, [box], True, color=(255, 255, 0), thickness=2)
+    return img
 
 
 def resize_img(img, input_size=600):
@@ -553,3 +566,154 @@ def draw_boxes(image, boxes, scores=None, drop_score=0.5):
         box = np.reshape(np.array(box), [-1, 1, 2]).astype(np.int64)
         image = cv2.polylines(np.array(image), [box], True, (255, 0, 0), 2)
     return image
+
+def get_rotate_crop_image(img, points):
+    '''
+    img_height, img_width = img.shape[0:2]
+    left = int(np.min(points[:, 0]))
+    right = int(np.max(points[:, 0]))
+    top = int(np.min(points[:, 1]))
+    bottom = int(np.max(points[:, 1]))
+    img_crop = img[top:bottom, left:right, :].copy()
+    points[:, 0] = points[:, 0] - left
+    points[:, 1] = points[:, 1] - top
+    '''
+    img_crop_width = int(
+        max(
+            np.linalg.norm(points[0] - points[1]),
+            np.linalg.norm(points[2] - points[3])))
+    img_crop_height = int(
+        max(
+            np.linalg.norm(points[0] - points[3]),
+            np.linalg.norm(points[1] - points[2])))
+    pts_std = np.float32([[0, 0], [img_crop_width, 0],
+                          [img_crop_width, img_crop_height],
+                          [0, img_crop_height]])
+    M = cv2.getPerspectiveTransform(points, pts_std)
+    dst_img = cv2.warpPerspective(
+        img,
+        M, (img_crop_width, img_crop_height),
+        borderMode=cv2.BORDER_REPLICATE,
+        flags=cv2.INTER_CUBIC)
+    dst_img_height, dst_img_width = dst_img.shape[0:2]
+    if dst_img_height * 1.0 / dst_img_width >= 1.5:
+        dst_img = np.rot90(dst_img)
+    return dst_img
+
+def get_minarea_rect_crop(img, points):
+    bounding_box = cv2.minAreaRect(np.array(points).astype(np.int32))
+    points = sorted(list(cv2.boxPoints(bounding_box)), key=lambda x: x[0])
+
+    index_a, index_b, index_c, index_d = 0, 1, 2, 3
+    if points[1][1] > points[0][1]:
+        index_a = 0
+        index_d = 1
+    else:
+        index_a = 1
+        index_d = 0
+    if points[3][1] > points[2][1]:
+        index_b = 2
+        index_c = 3
+    else:
+        index_b = 3
+        index_c = 2
+
+    box = [points[index_a], points[index_b], points[index_c], points[index_d]]
+    crop_img = get_rotate_crop_image(img, np.array(box))
+    return crop_img
+
+
+def slice_generator(image, horizontal_stride, vertical_stride, maximum_slices=500):
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+
+    image_h, image_w = image.shape[:2]
+    vertical_num_slices = (image_h + vertical_stride - 1) // vertical_stride
+    horizontal_num_slices = (image_w + horizontal_stride - 1) // horizontal_stride
+
+    assert (
+        vertical_num_slices > 0
+    ), "Invalid number ({}) of vertical slices".format(vertical_num_slices)
+
+    assert (
+        horizontal_num_slices > 0
+    ), "Invalid number ({}) of horizontal slices".format(horizontal_num_slices)
+
+    if vertical_num_slices >= maximum_slices:
+        recommended_vertical_stride = max(1, image_h // maximum_slices) + 1
+        assert (
+            False
+        ), "Too computationally expensive with {} slices, try a higher vertical stride (recommended minimum: {})".format(vertical_num_slices, recommended_vertical_stride)
+
+    if horizontal_num_slices >= maximum_slices:
+        recommended_horizontal_stride = max(1, image_w // maximum_slices) + 1
+        assert (
+            False
+        ), "Too computationally expensive with {} slices, try a higher horizontal stride (recommended minimum: {})".format(horizontal_num_slices, recommended_horizontal_stride)
+
+    for v_slice_idx in range(vertical_num_slices):
+        v_start = max(0, (v_slice_idx * vertical_stride))
+        v_end = min(((v_slice_idx + 1) * vertical_stride), image_h)
+        vertical_slice = image[v_start:v_end, :]
+        for h_slice_idx in range(horizontal_num_slices):
+            h_start = max(0, (h_slice_idx * horizontal_stride))
+            h_end = min(((h_slice_idx + 1) * horizontal_stride), image_w)
+            horizontal_slice = vertical_slice[:, h_start:h_end]
+
+            yield (horizontal_slice, v_start, h_start)
+
+
+def calculate_box_extents(box):
+    min_x = box[0][0]
+    max_x = box[1][0]
+    min_y = box[0][1]
+    max_y = box[2][1]
+    return min_x, max_x, min_y, max_y
+
+def merge_boxes(box1, box2, x_threshold, y_threshold):
+    min_x1, max_x1, min_y1, max_y1 = calculate_box_extents(box1)
+    min_x2, max_x2, min_y2, max_y2 = calculate_box_extents(box2)
+
+    if (
+        abs(min_y1 - min_y2) <= y_threshold
+        and abs(max_y1 - max_y2) <= y_threshold
+        and abs(max_x1 - min_x2) <= x_threshold
+    ):
+        new_xmin = min(min_x1, min_x2)
+        new_xmax = max(max_x1, max_x2)
+        new_ymin = min(min_y1, min_y2)
+        new_ymax = max(max_y1, max_y2)
+        return [
+            [new_xmin, new_ymin],
+            [new_xmax, new_ymin],
+            [new_xmax, new_ymax],
+            [new_xmin, new_ymax],
+        ]
+    else:
+        return None
+
+def merge_fragmented(boxes, x_threshold=10, y_threshold=10):
+    merged_boxes = []
+    visited = set()
+
+    for i, box1 in enumerate(boxes):
+        if i in visited:
+            continue
+
+        merged_box = [point[:] for point in box1]
+
+        for j, box2 in enumerate(boxes[i + 1 :], start=i + 1):
+            if j not in visited:
+                merged_result = merge_boxes(
+                    merged_box, box2, x_threshold=x_threshold, y_threshold=y_threshold
+                )
+                if merged_result:
+                    merged_box = merged_result
+                    visited.add(j)
+
+        merged_boxes.append(merged_box)
+
+    if len(merged_boxes) == len(boxes):
+        return np.array(merged_boxes)
+    else:
+        return merge_fragmented(merged_boxes, x_threshold, y_threshold)
