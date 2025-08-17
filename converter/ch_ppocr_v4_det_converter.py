@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import torch
 from pytorchocr.base_ocr_v20 import BaseOCRV20
+import paddle
 
 
 class PPOCRv4DetConverter(BaseOCRV20):
@@ -17,7 +18,8 @@ class PPOCRv4DetConverter(BaseOCRV20):
         print('paddle weights loading...')
         import paddle.fluid as fluid
         with fluid.dygraph.guard():
-            para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+            # para_state_dict, opti_state_dict = fluid.load_dygraph(weights_path)
+            para_state_dict = paddle.load(weights_path)
 
         for k,v in para_state_dict.items():
 
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError
 
-    paddle_pretrained_model_path = os.path.join(os.path.abspath(args.src_model_path), 'best_accuracy')
+    paddle_pretrained_model_path = os.path.join(os.path.abspath(args.src_model_path), 'inference')
     converter = PPOCRv4DetConverter(cfg, paddle_pretrained_model_path)
 
     print('todo')

@@ -190,6 +190,7 @@ def main(args):
         for index, img in enumerate(imgs):
             starttime = time.time()
             dt_boxes, rec_res, time_dict = text_sys(img)
+            print('dt_boxes:', dt_boxes, 'rec_res:', rec_res)
             elapse = time.time() - starttime
             if len(imgs) > 1:
                 print(
